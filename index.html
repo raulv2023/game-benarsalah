@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Benar Salah AI</title>
+    <title>Game Benar Salah Interaktif</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
@@ -17,6 +17,17 @@
                     fontFamily: {
                         sans: ['Nunito', 'sans-serif'],
                         display: ['"Fredoka One"', 'cursive'],
+                    },
+                    animation: {
+                        'bounce-in': 'bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.26, 1.55) forwards',
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        bounceIn: {
+                            '0%': { transform: 'scale(0.3) translateY(100px)', opacity: '0' },
+                            '50%': { transform: 'scale(1.05) translateY(-10px)', opacity: '1' },
+                            '100%': { transform: 'scale(1) translateY(0)', opacity: '1' },
+                        }
                     }
                 }
             }
@@ -25,166 +36,372 @@
 </head>
 <body class="font-sans text-slate-800 antialiased bg-slate-900 w-screen h-screen overflow-hidden flex select-none">
 
-    <!-- Screen Game -->
     <div class="relative w-full h-full flex bg-black">
         
-        <!-- Video Kamera -->
         <video id="webcam" class="absolute inset-0 w-full h-full object-cover transform -scale-x-100" autoplay muted playsinline></video>
         
-        <!-- Overlay Petunjuk Kiri-Kanan -->
-        <div class="absolute left-0 top-0 w-1/2 h-full bg-red-500/20 border-r-2 border-white/20 flex items-center justify-center pointer-events-none">
-            <span class="text-white/60 font-display text-4xl md:text-6xl tracking-widest">👈 SALAH</span>
-        </div>
-        <div class="absolute right-0 top-0 w-1/2 h-full bg-green-500/20 flex items-center justify-center pointer-events-none">
-            <span class="text-white/60 font-display text-4xl md:text-6xl tracking-widest">BENAR 👉</span>
-        </div>
-
-        <!-- Header Atas: Skor, Soal & Waktu -->
-        <div class="absolute top-0 left-0 w-full p-6 flex justify-between items-start z-30 pointer-events-none">
-            <div class="bg-slate-800/90 backdrop-blur-md text-white px-6 py-3 rounded-2xl shadow-xl flex flex-col items-center border border-slate-700">
-                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Skor</span>
-                <span class="text-3xl font-display text-emerald-400" id="score">0</span>
-            </div>
-
-            <div class="bg-slate-800/95 backdrop-blur-md px-8 py-5 rounded-3xl shadow-2xl border border-slate-700 max-w-2xl mx-auto flex-grow text-center mx-4">
-                <h2 class="text-emerald-400 font-bold text-sm tracking-widest uppercase mb-1" id="q-num">Memuat Soal...</h2>
-                <p class="text-2xl md:text-3xl font-bold text-white leading-snug" id="q-text">Mengecek koneksi ke Spreadsheet...</p>
-            </div>
-
-            <div class="bg-slate-800/90 backdrop-blur-md text-white px-6 py-3 rounded-2xl shadow-xl flex flex-col items-center border border-slate-700">
-                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Waktu</span>
-                <span class="text-3xl font-display text-amber-400" id="timer">15</span>
+        <!-- Zona Kiri: SALAH -->
+        <div id="zone-salah" class="absolute left-0 top-0 w-1/2 h-full bg-red-500/25 border-r-4 border-white/50 flex flex-col items-center justify-center transition-all duration-300 z-10">
+            <span class="text-white font-display text-6xl md:text-8xl opacity-80 tracking-widest drop-shadow-lg mb-4">SALAH</span>
+            <div class="w-64 h-6 bg-black/40 rounded-full overflow-hidden opacity-0 transition-opacity duration-300 shadow-inner" id="bar-salah-container">
+                <div id="bar-salah" class="h-full bg-red-400 w-0 transition-all duration-100"></div>
             </div>
         </div>
 
-        <!-- Status AI/Kamera Overlay -->
-        <div id="status-box" class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md px-6 py-2.5 rounded-full border border-slate-700 text-xs font-bold text-white z-30 flex items-center gap-2 shadow-2xl">
-            <span id="status-dot" class="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
-            <span id="status-text">Menyiapkan Kamera & AI...</span>
+        <!-- Zona Kanan: BENAR -->
+        <div id="zone-benar" class="absolute right-0 top-0 w-1/2 h-full bg-green-500/25 flex flex-col items-center justify-center transition-all duration-300 z-10">
+            <span class="text-white font-display text-6xl md:text-8xl opacity-80 tracking-widest drop-shadow-lg mb-4">BENAR</span>
+            <div class="w-64 h-6 bg-black/40 rounded-full overflow-hidden opacity-0 transition-opacity duration-300 shadow-inner" id="bar-benar-container">
+                <div id="bar-benar" class="h-full bg-green-400 w-0 transition-all duration-100"></div>
+            </div>
+        </div>
+
+        <!-- Header Atas (Nama, Skor, Soal, Timer) -->
+        <div class="absolute top-0 left-0 w-full p-8 flex justify-between items-start z-30 pointer-events-none">
+            
+            <div class="bg-amber-500/90 backdrop-blur-sm text-white px-6 py-4 rounded-3xl shadow-xl flex flex-col items-center flex-shrink-0 border-4 border-amber-300">
+                <span class="text-xs font-bold uppercase opacity-90 mb-1" id="ui-player-name">Pemain</span>
+                <span class="text-4xl font-display leading-none" id="ui-score">0</span>
+            </div>
+
+            <div class="bg-white/95 backdrop-blur-md px-10 py-6 rounded-3xl shadow-2xl border-4 border-white/50 max-w-4xl mx-auto flex-grow text-center mx-6">
+                <h2 class="text-sky-600 font-bold text-lg tracking-widest uppercase mb-2" id="question-number">Pertanyaan 1/1</h2>
+                <p class="text-4xl md:text-5xl font-black text-slate-800 leading-snug font-display" id="question-text">Memuat pertanyaan...</p>
+            </div>
+
+            <div class="bg-indigo-600/90 backdrop-blur-sm text-white px-6 py-4 rounded-3xl shadow-xl flex flex-col items-center flex-shrink-0 border-4 border-indigo-400">
+                <span class="text-xs font-bold uppercase opacity-90 mb-1">Sisa Waktu</span>
+                <span class="text-5xl font-display leading-none" id="timer">0</span>
+            </div>
+        </div>
+
+        <!-- Pop-Up Jawaban -->
+        <div id="popup-answer" class="hidden absolute inset-0 flex items-center justify-center z-40 bg-black/40 backdrop-blur-sm">
+            <div id="popup-content" class="bg-white px-16 py-12 rounded-[3rem] shadow-2xl transform scale-0 flex flex-col items-center border-8">
+                <div id="popup-icon" class="text-8xl mb-4">🎉</div>
+                <h2 id="popup-title" class="text-5xl font-display font-black text-slate-800 mb-2">Tepat Sekali!</h2>
+                <p id="popup-score-earned" class="text-2xl font-bold text-green-500 bg-green-100 px-6 py-2 rounded-full mt-4">+100 Poin</p>
+            </div>
         </div>
     </div>
 
-    <script>
-        // TEMPELKAN URL WEB APP GOOGLE APPS SCRIPT KAMU DI DALAM TANDA KUTIP SINI:
-        const API_URL = "https://script.google.com/macros/s/AKfycbzCnDwFsd4prRSr4eVDKmOJmAWhLgI3WzuTJo9ez-X2f76MeUd3E0CSKi1xHT2fBtcIxQ/exec";
+    <!-- Screen 1: Input Nama -->
+    <div id="start-screen" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center text-center p-6 z-50 transition-opacity duration-500">
+        <div class="text-8xl mb-6 animate-bounce">🚀</div>
+        <h1 class="text-white font-black text-5xl md:text-6xl mb-4 font-display">Tantangan Benar Salah</h1>
+        <p class="text-sky-300 font-semibold text-xl mb-10 max-w-lg">Geser tubuhmu ke arah Hijau atau Merah untuk menjawab dengan cepat. Semakin cepat, skormu semakin besar!</p>
+        
+        <input type="text" id="input-player-name" placeholder="Siapa Namamu?" class="text-3xl p-5 rounded-2xl text-center mb-8 w-96 text-black border-4 border-sky-400 focus:outline-none focus:border-green-400 focus:ring-4 ring-green-400/50 shadow-2xl transition-all" autocomplete="off">
+        
+        <button id="btn-lanjut" onclick="lanjutKePersiapan()" class="bg-gradient-to-r from-sky-400 to-blue-600 hover:from-sky-500 hover:to-blue-700 text-white px-16 py-6 rounded-full font-black text-3xl shadow-2xl transform transition hover:scale-105 active:scale-95 border-4 border-sky-300 cursor-pointer">LANJUT</button>
+    </div>
 
+    <!-- Screen 2: Persiapan Kamera -->
+    <div id="prep-screen" class="hidden absolute inset-0 bg-slate-900 flex flex-col items-center justify-center text-center p-6 z-50 transition-opacity duration-500">
+        <div class="text-7xl mb-4">🤖</div>
+        <h2 class="text-white font-black text-4xl mb-4 font-display" id="prep-greeting">Halo!</h2>
+        <p class="text-sky-300 font-semibold text-lg mb-8 max-w-lg">Bersiaplah di depan kamera. Pastikan wajahmu terlihat jelas ya!</p>
+        
+        <div id="loading-status" class="w-full max-w-2xl text-center flex flex-col items-center">
+            <p class="text-yellow-400 font-bold text-xl mb-6 animate-pulse">Menyiapkan Kamera & AI...</p>
+        </div>
+        
+        <button id="btn-start" onclick="initiateGame()" class="hidden bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700 text-white px-16 py-6 rounded-full font-black text-3xl shadow-2xl transform transition hover:scale-105 active:scale-95 border-4 border-green-300 cursor-pointer">MULAI MAIN</button>
+    </div>
+
+    <!-- Screen 3: Hasil Akhir -->
+    <div id="end-screen" class="hidden absolute inset-0 bg-slate-900 flex flex-col items-center justify-center text-center p-6 z-50">
+        <div class="text-8xl mb-4">🏆</div>
+        <h1 class="text-white font-black text-6xl mb-2 font-display">Permainan Selesai!</h1>
+        <p id="final-player-name" class="text-sky-300 font-bold text-4xl mb-8 font-display">Kerja Bagus!</p>
+        
+        <div class="bg-gradient-to-b from-amber-400 to-orange-500 p-10 rounded-3xl border-8 border-white/20 mb-10 shadow-[0_0_50px_rgba(251,191,36,0.5)] transform hover:scale-105 transition-transform">
+            <p class="text-white/90 text-2xl font-bold mb-2 uppercase tracking-widest">Total Skor Kamu</p>
+            <p id="final-score" class="text-white font-black text-9xl drop-shadow-xl font-display">0</p>
+        </div>
+        
+        <button onclick="location.reload()" class="bg-sky-500 hover:bg-sky-400 text-white px-12 py-5 rounded-full font-black text-2xl shadow-xl transform transition hover:scale-105 active:scale-95 border-4 border-sky-300 cursor-pointer">MAIN LAGI</button>
+    </div>
+
+    <script>
+        // TEMPELKAN URL WEB APP GOOGLE APPS SCRIPT KAMU DI SINI
+        const API_URL = "PASTE_URL_WEB_APP_DI_SINI";
+
+        let playerName = "";
+        let totalScore = 0;
         let quizData = [];
-        let currentIdx = 0;
-        let score = 0;
-        let timer = 15;
-        let timerInterval;
+        let currentQuestionIndex = 0;
         let isAnswering = false;
+        let timerInterval;
+        let timeLeft = 0;
+        let currentQuestionMaxTime = 0;
 
         const video = document.getElementById('webcam');
-        const statusText = document.getElementById('status-text');
-        const statusDot = document.getElementById('status-dot');
+        let modelLoaded = false;
+        let detectionInterval;
+        
+        let activeZone = null; 
+        let lockStartTime = 0;
+        // DIUBAH KE 3000 MS (3 DETIK HOLD SEBELUM LOCK JAWABAN)
+        const lockDuration = 3000; 
 
-        async function init() {
+        async function loadQuizData() {
             try {
-                // 1. Ambil data soal
-                statusText.innerText = 'Mengambil soal dari Spreadsheet...';
                 const response = await fetch(API_URL);
                 quizData = await response.json();
-
-                if (!quizData || quizData.length === 0) {
-                    throw new Error("Data soal di Spreadsheet kosong!");
-                }
-
-                // 2. Akses Kamera
-                statusText.innerText = 'Meminta izin kamera...';
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-                video.srcObject = stream;
-
-                // 3. Muat Model AI
-                statusText.innerText = 'Memuat Model Deteksi Wajah...';
-                await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
-
-                statusDot.className = 'w-3 h-3 rounded-full bg-emerald-500 animate-pulse';
-                statusText.innerText = 'Kamera & AI Aktif!';
-
-                startQuiz();
-                startDetection();
+                checkReadiness();
             } catch (err) {
-                statusDot.className = 'w-3 h-3 rounded-full bg-rose-500';
-                statusText.innerText = 'Error: ' + err.message;
-                alert('Gagal: ' + err.message);
+                console.error("Gagal mengambil data:", err);
+                const statusDiv = document.getElementById('loading-status');
+                if (statusDiv) {
+                    statusDiv.innerHTML = `<p class="text-rose-400 font-bold text-xl">⚠️ Gagal memuat data dari Spreadsheet. Pastikan URL Web App sudah benar!</p>`;
+                }
             }
         }
 
-        function startQuiz() {
-            if (currentIdx >= quizData.length) {
-                document.getElementById('q-num').innerText = "PERMAINAN SELESAI 🎉";
-                document.getElementById('q-text').innerText = `Skor Akhir Anda: ${score}`;
-                confetti({ particleCount: 150, spread: 100, origin: { y: 0.5 } });
+        async function initCameraAndAI() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                video.srcObject = stream;
+                
+                await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+                modelLoaded = true;
+                checkReadiness();
+            } catch (err) {
+                console.error("Error Kamera:", err);
+                const statusDiv = document.getElementById('loading-status');
+                statusDiv.innerHTML = `
+                    <div class="text-red-400 font-bold text-xl mb-4">⚠️ Kamera Terhalang atau Belum Diizinkan</div>
+                    <div class="bg-slate-800 p-4 rounded-2xl border-2 border-red-400/50 text-left mb-4 shadow-lg w-full">
+                        <p class="text-white mb-2 font-bold">Cara Memperbaiki:</p>
+                        <ol class="text-sky-200 list-decimal list-inside space-y-1 text-sm">
+                            <li>Klik ikon Gembok 🔒 atau Setelan di sebelah alamat web.</li>
+                            <li>Cari menu Kamera dan ubah menjadi <b>Izinkan (Allow)</b>.</li>
+                            <li>Klik tombol Refresh di bawah ini.</li>
+                        </ol>
+                    </div>
+                    <button onclick="location.reload()" class="bg-sky-500 hover:bg-sky-400 text-white px-8 py-3 rounded-full font-black text-xl shadow-xl border-4 border-sky-300">
+                        🔄 REFRESH HALAMAN
+                    </button>
+                `;
+            }
+        }
+
+        function checkReadiness() {
+            if (quizData.length > 0 && modelLoaded) {
+                document.getElementById('loading-status').classList.add('hidden');
+                document.getElementById('btn-start').classList.remove('hidden');
+            }
+        }
+
+        function lanjutKePersiapan() {
+            const nameInput = document.getElementById('input-player-name').value.trim();
+            if(!nameInput) {
+                document.getElementById('input-player-name').classList.add('animate-pulse', 'border-red-500');
+                setTimeout(() => document.getElementById('input-player-name').classList.remove('animate-pulse', 'border-red-500'), 1000);
+                return;
+            }
+            
+            playerName = nameInput;
+            document.getElementById('prep-greeting').innerText = `Halo, ${playerName}!`;
+            
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('prep-screen').classList.remove('hidden');
+        }
+
+        function initiateGame() {
+            document.getElementById('ui-player-name').innerText = playerName;
+            
+            document.getElementById('prep-screen').style.opacity = '0';
+            setTimeout(() => {
+                document.getElementById('prep-screen').classList.add('hidden');
+                startDetection();
+                showNextQuestion();
+            }, 500);
+        }
+
+        function showNextQuestion() {
+            if (currentQuestionIndex >= quizData.length) {
+                showEndScreen();
                 return;
             }
 
             isAnswering = false;
-            const q = quizData[currentIdx];
-            document.getElementById('q-num').innerText = `Pertanyaan ${currentIdx + 1} dari ${quizData.length}`;
-            document.getElementById('q-text').innerText = q.pertanyaan;
-            
-            timer = q.timer || 15;
-            document.getElementById('timer').innerText = timer;
+            activeZone = null;
+            resetZones();
+
+            const q = quizData[currentQuestionIndex];
+            currentQuestionMaxTime = q.timer || 15;
+            timeLeft = currentQuestionMaxTime;
+
+            document.getElementById('question-number').innerText = `Pertanyaan ${currentQuestionIndex + 1}/${quizData.length}`;
+            document.getElementById('question-text').innerText = q.pertanyaan;
+            document.getElementById('timer').innerText = timeLeft;
 
             clearInterval(timerInterval);
             timerInterval = setInterval(() => {
-                timer--;
-                document.getElementById('timer').innerText = timer;
-                if (timer <= 0) {
+                timeLeft--;
+                document.getElementById('timer').innerText = timeLeft;
+                
+                if (timeLeft <= 0) {
                     clearInterval(timerInterval);
-                    nextQuestion();
+                    processAnswer("WAKTU_HABIS"); 
                 }
             }, 1000);
         }
 
-        async function startDetection() {
-            setInterval(async () => {
-                if (isAnswering || video.paused || video.ended) return;
+        function startDetection() {
+            detectionInterval = setInterval(async () => {
+                if (isAnswering || video.paused || video.ended) return; 
 
                 const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+                
                 if (detections.length > 0) {
                     const face = detections[0].box;
                     const faceCenterX = face.x + (face.width / 2);
                     const videoWidth = video.videoWidth || 640;
 
-                    // Mengengkolkan kepala/badan ke kiri atau kanan (Mirror View)
-                    if (faceCenterX < videoWidth * 0.4) {
-                        processAnswer('SALAH');
-                    } else if (faceCenterX > videoWidth * 0.6) {
-                        processAnswer('BENAR');
+                    if (faceCenterX < videoWidth / 2) {
+                        handleZoneHover('BENAR');
+                    } else {
+                        handleZoneHover('SALAH');
                     }
+                } else {
+                    resetZones(); 
                 }
-            }, 200);
+            }, 100);
+        }
+
+        function handleZoneHover(zone) {
+            if (activeZone !== zone) {
+                activeZone = zone;
+                lockStartTime = Date.now();
+                resetZonesVisuals(); 
+                
+                if(zone === 'BENAR') {
+                    document.getElementById('zone-benar').classList.replace('bg-green-500/25', 'bg-green-500/70');
+                    document.getElementById('bar-benar-container').classList.remove('opacity-0');
+                } else {
+                    document.getElementById('zone-salah').classList.replace('bg-red-500/25', 'bg-red-500/70');
+                    document.getElementById('bar-salah-container').classList.remove('opacity-0');
+                }
+            }
+
+            const elapsed = Date.now() - lockStartTime;
+            let progress = Math.min((elapsed / lockDuration) * 100, 100);
+
+            if (zone === 'BENAR') {
+                document.getElementById('bar-benar').style.width = progress + '%';
+            } else {
+                document.getElementById('bar-salah').style.width = progress + '%';
+            }
+
+            // SETELAH HOLD 3 DETIK (PROGRESS 100%), BARU KUNCI JAWABAN & TAMPILKAN POP-UP
+            if (progress >= 100 && !isAnswering) {
+                isAnswering = true;
+                clearInterval(timerInterval);
+                processAnswer(zone);
+            }
+        }
+
+        function resetZonesVisuals() {
+            document.getElementById('zone-salah').classList.replace('bg-red-500/70', 'bg-red-500/25');
+            document.getElementById('zone-benar').classList.replace('bg-green-500/70', 'bg-green-500/25');
+            document.getElementById('bar-salah-container').classList.add('opacity-0');
+            document.getElementById('bar-benar-container').classList.add('opacity-0');
+            document.getElementById('bar-salah').style.width = '0%';
+            document.getElementById('bar-benar').style.width = '0%';
+        }
+
+        function resetZones() {
+            activeZone = null;
+            resetZonesVisuals();
         }
 
         function processAnswer(userAnswer) {
-            isAnswering = true;
-            clearInterval(timerInterval);
+            const correctAnswer = quizData[currentQuestionIndex].jawaban.toUpperCase();
+            
+            let isCorrect = (userAnswer === correctAnswer);
+            let scoreEarned = 0;
 
-            const correctAnswer = quizData[currentIdx].jawaban;
-            const isCorrect = (userAnswer === correctAnswer);
+            const popup = document.getElementById('popup-answer');
+            const popupContent = document.getElementById('popup-content');
+            const icon = document.getElementById('popup-icon');
+            const title = document.getElementById('popup-title');
+            const scoreText = document.getElementById('popup-score-earned');
 
-            if (isCorrect) {
-                score += 10;
-                document.getElementById('score').innerText = score;
-                confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 } });
+            if (userAnswer === "WAKTU_HABIS") {
+                popupContent.className = "bg-white px-16 py-12 rounded-[3rem] shadow-2xl transform flex flex-col items-center border-8 border-slate-400 transition-all duration-300 scale-100 animate-bounce-in";
+                icon.innerText = "⏳";
+                title.innerText = "Waktu Habis!";
+                title.className = "text-5xl font-display font-black text-slate-500 mb-2";
+                scoreText.innerText = "+0 Poin";
+                scoreText.className = "text-2xl font-bold text-slate-500 bg-slate-100 px-6 py-2 rounded-full mt-4";
+            }
+            else if (isCorrect) {
+                let timeRatio = timeLeft / currentQuestionMaxTime;
+                scoreEarned = Math.max(20, Math.round(100 * timeRatio));
+                totalScore += scoreEarned;
+
+                document.getElementById('ui-score').innerText = totalScore;
+
+                popupContent.className = "bg-white px-16 py-12 rounded-[3rem] shadow-2xl transform flex flex-col items-center border-8 border-green-400 transition-all duration-300 scale-100 animate-bounce-in";
+                icon.innerText = "🎉";
+                title.innerText = "Tepat Sekali!";
+                title.className = "text-5xl font-display font-black text-green-500 mb-2";
+                scoreText.innerText = `+${scoreEarned} Poin`;
+                scoreText.className = "text-2xl font-bold text-green-600 bg-green-100 px-6 py-2 rounded-full mt-4";
+                
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            } 
+            else {
+                popupContent.className = "bg-white px-16 py-12 rounded-[3rem] shadow-2xl transform flex flex-col items-center border-8 border-red-400 transition-all duration-300 scale-100 animate-bounce-in";
+                icon.innerText = "❌";
+                title.innerText = "Kurang Tepat!";
+                title.className = "text-5xl font-display font-black text-red-500 mb-2";
+                scoreText.innerText = "+0 Poin";
+                scoreText.className = "text-2xl font-bold text-red-500 bg-red-100 px-6 py-2 rounded-full mt-4";
             }
 
-            statusText.innerText = isCorrect ? `✅ Jawaban Kamu Benar (${userAnswer})!` : `❌ Jawaban Kamu Salah!`;
+            popup.classList.remove('hidden');
 
+            // DELAY POP-UP (3 DETIK) SEBELUM MASUK KE PERTANYAAN BERIKUTNYA
             setTimeout(() => {
-                statusText.innerText = 'Kamera & AI Aktif!';
-                nextQuestion();
-            }, 1500);
+                popupContent.classList.replace('scale-100', 'scale-0');
+                setTimeout(() => {
+                    popup.classList.add('hidden');
+                    currentQuestionIndex++;
+                    showNextQuestion();
+                }, 300);
+            }, 3000);
         }
 
-        function nextQuestion() {
-            currentIdx++;
-            startQuiz();
+        function showEndScreen() {
+            clearInterval(detectionInterval);
+            document.getElementById('end-screen').classList.remove('hidden');
+            document.getElementById('final-player-name').innerText = `Kerja Bagus, ${playerName}!`;
+            document.getElementById('final-score').innerText = totalScore;
+            
+            const duration = 3 * 1000;
+            const end = Date.now() + duration;
+
+            (function frame() {
+                confetti({
+                    particleCount: 5, angle: 60, spread: 55, origin: { x: 0 },
+                    colors: ['#26ccff', '#a25afd', '#ff5e7e', '#88ff5a', '#fcff42', '#ffa62d']
+                });
+                confetti({
+                    particleCount: 5, angle: 120, spread: 55, origin: { x: 1 },
+                    colors: ['#26ccff', '#a25afd', '#ff5e7e', '#88ff5a', '#fcff42', '#ffa62d']
+                });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            }());
         }
 
-        window.onload = init;
+        window.onload = () => {
+            initCameraAndAI();
+            loadQuizData();
+        };
     </script>
 </body>
 </html>
