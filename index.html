@@ -56,9 +56,8 @@
             </div>
         </div>
 
-        <!-- Header Atas (Nama, Skor, Soal, Timer) -->
+        <!-- Header Atas -->
         <div class="absolute top-0 left-0 w-full p-8 flex justify-between items-start z-30 pointer-events-none">
-            
             <div class="bg-amber-500/90 backdrop-blur-sm text-white px-6 py-4 rounded-3xl shadow-xl flex flex-col items-center flex-shrink-0 border-4 border-amber-300">
                 <span class="text-xs font-bold uppercase opacity-90 mb-1" id="ui-player-name">Pemain</span>
                 <span class="text-4xl font-display leading-none" id="ui-score">0</span>
@@ -103,7 +102,7 @@
         <p class="text-sky-300 font-semibold text-lg mb-8 max-w-lg">Bersiaplah di depan kamera. Pastikan wajahmu terlihat jelas ya!</p>
         
         <div id="loading-status" class="w-full max-w-2xl text-center flex flex-col items-center">
-            <p class="text-yellow-400 font-bold text-xl mb-6 animate-pulse">Menyiapkan Kamera & AI...</p>
+            <p class="text-yellow-400 font-bold text-xl mb-6 animate-pulse">Menyiapkan Kamera HD & AI...</p>
         </div>
         
         <button id="btn-start" onclick="initiateGame()" class="hidden bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700 text-white px-16 py-6 rounded-full font-black text-3xl shadow-2xl transform transition hover:scale-105 active:scale-95 border-4 border-green-300 cursor-pointer">MULAI MAIN</button>
@@ -124,7 +123,6 @@
     </div>
 
     <script>
-        // URL WEB APP GOOGLE APPS SCRIPT
         const API_URL = "https://script.google.com/macros/s/AKfycbzCnDwFsd4prRSr4eVDKmOJmAWhLgI3WzuTJo9ez-X2f76MeUd3E0CSKi1xHT2fBtcIxQ/exec";
 
         let playerName = "";
@@ -140,13 +138,12 @@
         let modelLoaded = false;
         let detectionInterval;
         
-        // --- VARIABEL SENSOR & TOLERANSI ---
         let activeZone = null; 
         let lockStartTime = 0;
-        const lockDuration = 3000; // 3 Detik Hold untuk Lock
+        const lockDuration = 3000; 
 
         let lastFaceSeenTime = 0;
-        const gracePeriod = 600; // Toleransi 0.6 detik jika wajah tidak terdeteksi sesaat saat bergerak
+        const gracePeriod = 600; 
 
         async function loadQuizData() {
             try {
@@ -164,7 +161,15 @@
 
         async function initCameraAndAI() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                // PAKSA RESOLUSI HD AGAR TIDAK BLUR DI LAYAR IFP/PID
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }, 
+                    audio: false 
+                });
                 video.srcObject = stream;
                 
                 await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
@@ -257,10 +262,14 @@
             detectionInterval = setInterval(async () => {
                 if (isAnswering || video.paused || video.ended) return; 
 
-                // Threshold optimal untuk akurasi dan kecepatan
+                // inputSize: 416 (Memperjelas deteksi di IFP)
+                // scoreThreshold: 0.2 (Mempermudah deteksi pengguna berkerudung/hijab)
                 const detections = await faceapi.detectAllFaces(
                     video, 
-                    new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 })
+                    new faceapi.TinyFaceDetectorOptions({ 
+                        inputSize: 416, 
+                        scoreThreshold: 0.2 
+                    })
                 );
                 
                 const now = Date.now();
@@ -274,7 +283,7 @@
 
                     let detectedZone = null;
 
-                    // Logika Hysteresis (Buffer Toleransi Gerakan)
+                    // Logika Hysteresis
                     if (activeZone === 'BENAR') {
                         if (ratio < 0.55) {
                             detectedZone = 'BENAR';
@@ -297,7 +306,6 @@
 
                     handleZoneHover(detectedZone);
                 } else {
-                    // Grace Period: tidak langsung me-reset jika wajah hilang kurang dari 0.6 detik
                     if (now - lastFaceSeenTime > gracePeriod) {
                         resetZones(); 
                     }
@@ -315,6 +323,7 @@
                     document.getElementById('zone-benar').classList.replace('bg-green-500/25', 'bg-green-500/70');
                     document.getElementById('bar-benar-container').classList.remove('opacity-0');
                 } else {
+                    document.getElementById('zone-salah').classList.replace('bg-red-500/70', 'bg-red-500/25');
                     document.getElementById('zone-salah').classList.replace('bg-red-500/25', 'bg-red-500/70');
                     document.getElementById('bar-salah-container').classList.remove('opacity-0');
                 }
@@ -329,7 +338,6 @@
                 document.getElementById('bar-salah').style.width = progress + '%';
             }
 
-            // SETELAH HOLD 3 DETIK (PROGRESS 100%), KUNCI JAWABAN
             if (progress >= 100 && !isAnswering) {
                 isAnswering = true;
                 clearInterval(timerInterval);
