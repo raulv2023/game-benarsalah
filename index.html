@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Benar Salah Interaktif</title>
+    <title>Game Benar Salah Interaktif - Motion Detection</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <script>
@@ -88,7 +87,7 @@
     <div id="start-screen" class="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center text-center p-6 z-50 transition-opacity duration-500">
         <div class="text-7xl mb-4 animate-bounce">🚀</div>
         <h1 class="text-white font-black text-4xl md:text-5xl mb-4 font-display">Tantangan Benar Salah</h1>
-        <p class="text-sky-300 font-semibold text-lg mb-8 max-w-lg">Geser tubuhmu ke arah Hijau atau Merah untuk menjawab dengan cepat. Semakin cepat, skormu semakin besar!</p>
+        <p class="text-sky-300 font-semibold text-lg mb-8 max-w-lg">Lambaikan tangan atau bergeraklah di zona Hijau (BENAR) atau Merah (SALAH) untuk menjawab!</p>
         
         <input type="text" id="input-player-name" placeholder="Siapa Namamu?" class="text-2xl p-4 rounded-2xl text-center mb-8 w-80 text-black border-4 border-sky-400 focus:outline-none focus:border-green-400 focus:ring-4 ring-green-400/50 shadow-2xl transition-all" autocomplete="off">
         
@@ -97,12 +96,12 @@
 
     <!-- Screen 2: Persiapan Kamera -->
     <div id="prep-screen" class="hidden absolute inset-0 bg-slate-900 flex flex-col items-center justify-center text-center p-6 z-50 transition-opacity duration-500">
-        <div class="text-6xl mb-4">🤖</div>
+        <div class="text-6xl mb-4">🙋‍♂️</div>
         <h2 class="text-white font-black text-3xl mb-3 font-display" id="prep-greeting">Halo!</h2>
-        <p class="text-sky-300 font-semibold text-base mb-8 max-w-lg">Bersiaplah di depan kamera. Pastikan wajahmu terlihat jelas ya!</p>
+        <p class="text-sky-300 font-semibold text-base mb-8 max-w-lg">Berdirilah di depan kamera. Lambaikan tanganmu ke arah zona pilihanmu untuk mengisi bar jawaban!</p>
         
         <div id="loading-status" class="w-full max-w-2xl text-center flex flex-col items-center">
-            <p class="text-yellow-400 font-bold text-lg mb-6 animate-pulse">Menyiapkan Kamera HD & AI...</p>
+            <p class="text-yellow-400 font-bold text-lg mb-6 animate-pulse">Menyiapkan Detektor Gerakan HD...</p>
         </div>
         
         <button id="btn-start" onclick="initiateGame()" class="hidden bg-gradient-to-r from-green-400 to-emerald-600 hover:from-green-500 hover:to-emerald-700 text-white px-12 py-4 rounded-full font-black text-2xl shadow-2xl transform transition hover:scale-105 active:scale-95 border-4 border-green-300 cursor-pointer">MULAI MAIN</button>
@@ -135,15 +134,24 @@
         let currentQuestionMaxTime = 0;
 
         const video = document.getElementById('webcam');
-        let modelLoaded = false;
+        let cameraReady = false;
         let detectionInterval;
-        
-        let activeZone = null; 
-        let lockStartTime = 0;
-        const lockDuration = 3000; 
 
-        let lastFaceSeenTime = 0;
-        const gracePeriod = 600; 
+        // KANVAS MOTION DETECTION OFF-SCREEN
+        const motionCanvas = document.createElement('canvas');
+        const motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
+        const canvasW = 160; 
+        const canvasH = 90;
+        motionCanvas.width = canvasW;
+        motionCanvas.height = canvasH;
+
+        let prevFrameData = null;
+        let activeZone = null;
+        let lockStartTime = 0;
+        const lockDuration = 2500; // 2.5 detik gerakan untuk mengunci jawaban
+
+        let lastMotionTime = 0;
+        const gracePeriod = 500;
 
         async function loadQuizData() {
             try {
@@ -159,7 +167,7 @@
             }
         }
 
-        async function initCameraAndAI() {
+        async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
@@ -170,23 +178,13 @@
                     audio: false 
                 });
                 video.srcObject = stream;
-                
-                await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
-                modelLoaded = true;
+                cameraReady = true;
                 checkReadiness();
             } catch (err) {
                 console.error("Error Kamera:", err);
                 const statusDiv = document.getElementById('loading-status');
                 statusDiv.innerHTML = `
                     <div class="text-red-400 font-bold text-xl mb-4">⚠️ Kamera Terhalang atau Belum Diizinkan</div>
-                    <div class="bg-slate-800 p-4 rounded-2xl border-2 border-red-400/50 text-left mb-4 shadow-lg w-full">
-                        <p class="text-white mb-2 font-bold">Cara Memperbaiki:</p>
-                        <ol class="text-sky-200 list-decimal list-inside space-y-1 text-sm">
-                            <li>Klik ikon Gembok 🔒 atau Setelan di sebelah alamat web.</li>
-                            <li>Cari menu Kamera dan ubah menjadi <b>Izinkan (Allow)</b>.</li>
-                            <li>Klik tombol Refresh di bawah ini.</li>
-                        </ol>
-                    </div>
                     <button onclick="location.reload()" class="bg-sky-500 hover:bg-sky-400 text-white px-8 py-3 rounded-full font-black text-xl shadow-xl border-4 border-sky-300">
                         🔄 REFRESH HALAMAN
                     </button>
@@ -195,7 +193,7 @@
         }
 
         function checkReadiness() {
-            if (quizData.length > 0 && modelLoaded) {
+            if (quizData.length > 0 && cameraReady) {
                 document.getElementById('loading-status').classList.add('hidden');
                 document.getElementById('btn-start').classList.remove('hidden');
             }
@@ -222,7 +220,7 @@
             document.getElementById('prep-screen').style.opacity = '0';
             setTimeout(() => {
                 document.getElementById('prep-screen').classList.add('hidden');
-                startDetection();
+                startMotionDetection();
                 showNextQuestion();
             }, 500);
         }
@@ -257,56 +255,64 @@
             }, 1000);
         }
 
-        function startDetection() {
-            detectionInterval = setInterval(async () => {
-                if (isAnswering || video.paused || video.ended) return; 
+        // KODE UTAMA DETEKSI GERAKAN (MOTION DETECTION)
+        function startMotionDetection() {
+            detectionInterval = setInterval(() => {
+                if (isAnswering || video.paused || video.ended || !video.videoWidth) return;
 
-                const detections = await faceapi.detectAllFaces(
-                    video, 
-                    new faceapi.TinyFaceDetectorOptions({ 
-                        inputSize: 416, 
-                        scoreThreshold: 0.2 
-                    })
-                );
-                
-                const now = Date.now();
+                motionCtx.drawImage(video, 0, 0, canvasW, canvasH);
+                const currentFrame = motionCtx.getImageData(0, 0, canvasW, canvasH);
+                const currPixels = currentFrame.data;
 
-                if (detections.length > 0) {
-                    lastFaceSeenTime = now;
-                    const face = detections[0].box;
-                    const faceCenterX = face.x + (face.width / 2);
-                    const videoWidth = video.videoWidth || 640;
-                    const ratio = faceCenterX / videoWidth;
+                if (prevFrameData) {
+                    const prevPixels = prevFrameData.data;
+                    let motionRawLeft = 0;
+                    let motionRawRight = 0;
 
-                    let detectedZone = null;
+                    // Bandingkan perbedaan piksel antar-frame
+                    for (let i = 0; i < currPixels.length; i += 4) {
+                        const rDiff = Math.abs(currPixels[i] - prevPixels[i]);
+                        const gDiff = Math.abs(currPixels[i+1] - prevPixels[i+1]);
+                        const bDiff = Math.abs(currPixels[i+2] - prevPixels[i+2]);
 
-                    if (activeZone === 'BENAR') {
-                        if (ratio < 0.55) {
-                            detectedZone = 'BENAR';
-                        } else {
-                            detectedZone = 'SALAH';
+                        // Jika ada perubahan warna yang cukup besar (ada gerakan)
+                        if (rDiff + gDiff + bDiff > 70) {
+                            const pixelIndex = i / 4;
+                            const x = pixelIndex % canvasW;
+
+                            if (x < canvasW / 2) {
+                                motionRawLeft++;
+                            } else {
+                                motionRawRight++;
+                            }
                         }
-                    } else if (activeZone === 'SALAH') {
-                        if (ratio > 0.45) {
-                            detectedZone = 'SALAH';
+                    }
+
+                    // Karena video dicermin secara visual (mirror), 
+                    // Raw Left Canvas = BENAR (Kanan Layar)
+                    // Raw Right Canvas = SALAH (Kiri Layar)
+                    const motionBenar = motionRawLeft;
+                    const motionSalah = motionRawRight;
+
+                    const MIN_MOTION_THRESHOLD = 80; // Ambang batas jumlah piksel bergerak
+                    const now = Date.now();
+
+                    if (motionBenar > MIN_MOTION_THRESHOLD || motionSalah > MIN_MOTION_THRESHOLD) {
+                        lastMotionTime = now;
+                        if (motionBenar > motionSalah) {
+                            handleZoneHover('BENAR');
                         } else {
-                            detectedZone = 'BENAR';
+                            handleZoneHover('SALAH');
                         }
                     } else {
-                        if (ratio < 0.50) {
-                            detectedZone = 'BENAR';
-                        } else {
-                            detectedZone = 'SALAH';
+                        if (now - lastMotionTime > gracePeriod) {
+                            resetZones();
                         }
                     }
-
-                    handleZoneHover(detectedZone);
-                } else {
-                    if (now - lastFaceSeenTime > gracePeriod) {
-                        resetZones(); 
-                    }
                 }
-            }, 100);
+
+                prevFrameData = currentFrame;
+            }, 50); // Evaluasi gerakan setiap 50ms (20 FPS - Sangat Smooth & Responsif)
         }
 
         function handleZoneHover(zone) {
@@ -319,7 +325,6 @@
                     document.getElementById('zone-benar').classList.replace('bg-green-500/25', 'bg-green-500/70');
                     document.getElementById('bar-benar-container').classList.remove('opacity-0');
                 } else {
-                    document.getElementById('zone-salah').classList.replace('bg-red-500/70', 'bg-red-500/25');
                     document.getElementById('zone-salah').classList.replace('bg-red-500/25', 'bg-red-500/70');
                     document.getElementById('bar-salah-container').classList.remove('opacity-0');
                 }
@@ -435,7 +440,7 @@
         }
 
         window.onload = () => {
-            initCameraAndAI();
+            initCamera();
             loadQuizData();
         };
     </script>
