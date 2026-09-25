@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Benar Salah Interaktif - Motion Detection</title>
+    <title>Game Benar Salah Interaktif - Ultra Fast Motion Detection</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
@@ -40,18 +40,18 @@
         <video id="webcam" class="absolute inset-0 w-full h-full object-cover transform -scale-x-100" autoplay muted playsinline></video>
         
         <!-- Zona Kiri: SALAH -->
-        <div id="zone-salah" class="absolute left-0 top-0 w-1/2 h-full bg-red-500/25 border-r-4 border-white/50 flex flex-col items-center justify-center transition-all duration-300 z-10">
+        <div id="zone-salah" class="absolute left-0 top-0 w-1/2 h-full bg-red-500/25 border-r-4 border-white/50 flex flex-col items-center justify-center transition-all duration-200 z-10">
             <span class="text-white font-display text-4xl md:text-6xl opacity-80 tracking-widest drop-shadow-lg mb-4">SALAH</span>
-            <div class="w-64 h-6 bg-black/40 rounded-full overflow-hidden opacity-0 transition-opacity duration-300 shadow-inner" id="bar-salah-container">
-                <div id="bar-salah" class="h-full bg-red-400 w-0 transition-all duration-100"></div>
+            <div class="w-64 h-6 bg-black/40 rounded-full overflow-hidden opacity-0 transition-opacity duration-200 shadow-inner" id="bar-salah-container">
+                <div id="bar-salah" class="h-full bg-red-400 w-0 transition-all duration-75"></div>
             </div>
         </div>
 
         <!-- Zona Kanan: BENAR -->
-        <div id="zone-benar" class="absolute right-0 top-0 w-1/2 h-full bg-green-500/25 flex flex-col items-center justify-center transition-all duration-300 z-10">
+        <div id="zone-benar" class="absolute right-0 top-0 w-1/2 h-full bg-green-500/25 flex flex-col items-center justify-center transition-all duration-200 z-10">
             <span class="text-white font-display text-4xl md:text-6xl opacity-80 tracking-widest drop-shadow-lg mb-4">BENAR</span>
-            <div class="w-64 h-6 bg-black/40 rounded-full overflow-hidden opacity-0 transition-opacity duration-300 shadow-inner" id="bar-benar-container">
-                <div id="bar-benar" class="h-full bg-green-400 w-0 transition-all duration-100"></div>
+            <div class="w-64 h-6 bg-black/40 rounded-full overflow-hidden opacity-0 transition-opacity duration-200 shadow-inner" id="bar-benar-container">
+                <div id="bar-benar" class="h-full bg-green-400 w-0 transition-all duration-75"></div>
             </div>
         </div>
 
@@ -137,7 +137,6 @@
         let cameraReady = false;
         let detectionInterval;
 
-        // KANVAS MOTION DETECTION OFF-SCREEN
         const motionCanvas = document.createElement('canvas');
         const motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
         const canvasW = 160; 
@@ -148,10 +147,13 @@
         let prevFrameData = null;
         let activeZone = null;
         let lockStartTime = 0;
-        const lockDuration = 2500; // 2.5 detik gerakan untuk mengunci jawaban
+        
+        // PARAMETER PENYESUAIAN KECEPATAN DETEKSI
+        const lockDuration = 1200; // Hanya butuh 1.2 detik gerakan untuk mengunci jawaban
+        const MIN_MOTION_THRESHOLD = 40; // Sensitivitas tinggi, gerakan kecil langsung terbaca
+        const gracePeriod = 200; // Reset cepat (200ms) agar gerakan baru langsung direspon
 
         let lastMotionTime = 0;
-        const gracePeriod = 500;
 
         async function loadQuizData() {
             try {
@@ -255,7 +257,6 @@
             }, 1000);
         }
 
-        // KODE UTAMA DETEKSI GERAKAN (MOTION DETECTION)
         function startMotionDetection() {
             detectionInterval = setInterval(() => {
                 if (isAnswering || video.paused || video.ended || !video.videoWidth) return;
@@ -269,14 +270,12 @@
                     let motionRawLeft = 0;
                     let motionRawRight = 0;
 
-                    // Bandingkan perbedaan piksel antar-frame
                     for (let i = 0; i < currPixels.length; i += 4) {
                         const rDiff = Math.abs(currPixels[i] - prevPixels[i]);
                         const gDiff = Math.abs(currPixels[i+1] - prevPixels[i+1]);
                         const bDiff = Math.abs(currPixels[i+2] - prevPixels[i+2]);
 
-                        // Jika ada perubahan warna yang cukup besar (ada gerakan)
-                        if (rDiff + gDiff + bDiff > 70) {
+                        if (rDiff + gDiff + bDiff > 60) {
                             const pixelIndex = i / 4;
                             const x = pixelIndex % canvasW;
 
@@ -288,13 +287,8 @@
                         }
                     }
 
-                    // Karena video dicermin secara visual (mirror), 
-                    // Raw Left Canvas = BENAR (Kanan Layar)
-                    // Raw Right Canvas = SALAH (Kiri Layar)
                     const motionBenar = motionRawLeft;
                     const motionSalah = motionRawRight;
-
-                    const MIN_MOTION_THRESHOLD = 80; // Ambang batas jumlah piksel bergerak
                     const now = Date.now();
 
                     if (motionBenar > MIN_MOTION_THRESHOLD || motionSalah > MIN_MOTION_THRESHOLD) {
@@ -312,7 +306,7 @@
                 }
 
                 prevFrameData = currentFrame;
-            }, 50); // Evaluasi gerakan setiap 50ms (20 FPS - Sangat Smooth & Responsif)
+            }, 30); // Berjalan di ~33 FPS untuk respon real-time tanpa delay
         }
 
         function handleZoneHover(zone) {
