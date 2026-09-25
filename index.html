@@ -124,7 +124,7 @@
     </div>
 
     <script>
-        // TEMPELKAN URL WEB APP GOOGLE APPS SCRIPT KAMU DI SINI
+        // URL WEB APP GOOGLE APPS SCRIPT
         const API_URL = "https://script.google.com/macros/s/AKfycbzCnDwFsd4prRSr4eVDKmOJmAWhLgI3WzuTJo9ez-X2f76MeUd3E0CSKi1xHT2fBtcIxQ/exec";
 
         let playerName = "";
@@ -140,10 +140,13 @@
         let modelLoaded = false;
         let detectionInterval;
         
+        // --- VARIABEL SENSOR & TOLERANSI ---
         let activeZone = null; 
         let lockStartTime = 0;
-        // DIUBAH KE 3000 MS (3 DETIK HOLD SEBELUM LOCK JAWABAN)
-        const lockDuration = 3000; 
+        const lockDuration = 3000; // 3 Detik Hold untuk Lock
+
+        let lastFaceSeenTime = 0;
+        const gracePeriod = 600; // Toleransi 0.6 detik jika wajah tidak terdeteksi sesaat saat bergerak
 
         async function loadQuizData() {
             try {
@@ -254,20 +257,50 @@
             detectionInterval = setInterval(async () => {
                 if (isAnswering || video.paused || video.ended) return; 
 
-                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+                // Threshold optimal untuk akurasi dan kecepatan
+                const detections = await faceapi.detectAllFaces(
+                    video, 
+                    new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 })
+                );
                 
+                const now = Date.now();
+
                 if (detections.length > 0) {
+                    lastFaceSeenTime = now;
                     const face = detections[0].box;
                     const faceCenterX = face.x + (face.width / 2);
                     const videoWidth = video.videoWidth || 640;
+                    const ratio = faceCenterX / videoWidth;
 
-                    if (faceCenterX < videoWidth / 2) {
-                        handleZoneHover('BENAR');
+                    let detectedZone = null;
+
+                    // Logika Hysteresis (Buffer Toleransi Gerakan)
+                    if (activeZone === 'BENAR') {
+                        if (ratio < 0.55) {
+                            detectedZone = 'BENAR';
+                        } else {
+                            detectedZone = 'SALAH';
+                        }
+                    } else if (activeZone === 'SALAH') {
+                        if (ratio > 0.45) {
+                            detectedZone = 'SALAH';
+                        } else {
+                            detectedZone = 'BENAR';
+                        }
                     } else {
-                        handleZoneHover('SALAH');
+                        if (ratio < 0.50) {
+                            detectedZone = 'BENAR';
+                        } else {
+                            detectedZone = 'SALAH';
+                        }
                     }
+
+                    handleZoneHover(detectedZone);
                 } else {
-                    resetZones(); 
+                    // Grace Period: tidak langsung me-reset jika wajah hilang kurang dari 0.6 detik
+                    if (now - lastFaceSeenTime > gracePeriod) {
+                        resetZones(); 
+                    }
                 }
             }, 100);
         }
@@ -296,7 +329,7 @@
                 document.getElementById('bar-salah').style.width = progress + '%';
             }
 
-            // SETELAH HOLD 3 DETIK (PROGRESS 100%), BARU KUNCI JAWABAN & TAMPILKAN POP-UP
+            // SETELAH HOLD 3 DETIK (PROGRESS 100%), KUNCI JAWABAN
             if (progress >= 100 && !isAnswering) {
                 isAnswering = true;
                 clearInterval(timerInterval);
@@ -365,7 +398,6 @@
 
             popup.classList.remove('hidden');
 
-            // DELAY POP-UP (3 DETIK) SEBELUM MASUK KE PERTANYAAN BERIKUTNYA
             setTimeout(() => {
                 popupContent.classList.replace('scale-100', 'scale-0');
                 setTimeout(() => {
