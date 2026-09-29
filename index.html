@@ -149,9 +149,9 @@
         let lockStartTime = 0;
         
         // PARAMETER PENYESUAIAN KECEPATAN DETEKSI
-        const lockDuration = 1200; // Hanya butuh 1.2 detik gerakan untuk mengunci jawaban
-        const MIN_MOTION_THRESHOLD = 40; // Sensitivitas tinggi, gerakan kecil langsung terbaca
-        const gracePeriod = 200; // Reset cepat (200ms) agar gerakan baru langsung direspon
+        const lockDuration = 1200; // 1.2 detik gerakan untuk mengunci jawaban
+        const MIN_MOTION_THRESHOLD = 40; // Sensitivitas tinggi
+        const gracePeriod = 200; // Reset cepat (200ms)
 
         let lastMotionTime = 0;
 
@@ -170,27 +170,57 @@
         }
 
         async function initCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'user',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }, 
-                    audio: false 
-                });
+            const statusDiv = document.getElementById('loading-status');
+
+            // 1. Cek ketersediaan Secure Context / MediaDevices API (Penyebab umum gagal di PID)
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                if (statusDiv) {
+                    statusDiv.innerHTML = `
+                        <div class="text-red-400 font-bold text-xl mb-2">⚠️ Akses Kamera Terblokir (Koneksi Tidak Aman)</div>
+                        <p class="text-sky-200 text-sm">Gunakan URL berprotokol <b>HTTPS://</b> (bukan HTTP) agar PID mengizinkan kamera.</p>
+                    `;
+                }
+                return;
+            }
+
+            // 2. Daftar opsi constraint kamera dari ideal hingga fallback sederhana
+            const constraintOptions = [
+                { video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
+                { video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+                { video: true, audio: false } // Fallback universal untuk PID / USB Webcam
+            ];
+
+            let stream = null;
+
+            for (const constraint of constraintOptions) {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraint);
+                    if (stream) break;
+                } catch (err) {
+                    console.warn("Gagal memuat constraint kamera:", constraint, err);
+                }
+            }
+
+            if (stream) {
                 video.srcObject = stream;
+                
+                // Pemicu play manual untuk Chromium/WebView PID
+                video.onloadedmetadata = () => {
+                    video.play().catch(e => console.error("Gagal autoplay video PID:", e));
+                };
+
                 cameraReady = true;
                 checkReadiness();
-            } catch (err) {
-                console.error("Error Kamera:", err);
-                const statusDiv = document.getElementById('loading-status');
-                statusDiv.innerHTML = `
-                    <div class="text-red-400 font-bold text-xl mb-4">⚠️ Kamera Terhalang atau Belum Diizinkan</div>
-                    <button onclick="location.reload()" class="bg-sky-500 hover:bg-sky-400 text-white px-8 py-3 rounded-full font-black text-xl shadow-xl border-4 border-sky-300">
-                        🔄 REFRESH HALAMAN
-                    </button>
-                `;
+            } else {
+                if (statusDiv) {
+                    statusDiv.innerHTML = `
+                        <div class="text-red-400 font-bold text-xl mb-4">⚠️ Kamera PID Tidak Merespon / Izin Ditolak</div>
+                        <p class="text-sky-200 text-sm mb-4">Pastikan webcam terhubung dan izin kamera pada browser/app PID sudah diizinkan.</p>
+                        <button onclick="location.reload()" class="bg-sky-500 hover:bg-sky-400 text-white px-8 py-3 rounded-full font-black text-xl shadow-xl border-4 border-sky-300">
+                            🔄 REFRESH HALAMAN
+                        </button>
+                    `;
+                }
             }
         }
 
@@ -306,7 +336,7 @@
                 }
 
                 prevFrameData = currentFrame;
-            }, 30); // Berjalan di ~33 FPS untuk respon real-time tanpa delay
+            }, 30);
         }
 
         function handleZoneHover(zone) {
